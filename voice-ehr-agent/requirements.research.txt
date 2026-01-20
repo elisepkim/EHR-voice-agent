@@ -1,0 +1,7 @@
+torch
+transformers
+mastra
+llama-index
+llama-index-core
+graphviz
+pytest

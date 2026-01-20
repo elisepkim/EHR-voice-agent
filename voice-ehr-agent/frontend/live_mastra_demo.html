@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mastra AI EHR Dashboard</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 2rem;
+    background-color: #f4f6f8;
+}
+h2 { color: #2a3eb1; }
+textarea { width: 100%; height: 80px; padding: 0.5rem; font-size: 1rem; }
+button { margin-top: 1rem; padding: 0.6rem 1.2rem; font-size: 1rem; background: #2a3eb1; color: white; border: none; cursor: pointer; }
+button:hover { background: #1f2a91; }
+.panel { background: white; padding: 1rem; margin-top: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.panel h3 { margin-top: 0; color: #444; }
+.json-output { background: #f0f0f0; padding: 0.8rem; border-radius: 5px; font-family: monospace; overflow-x: auto; white-space: pre-wrap; }
+.memory { font-size: 0.9rem; color: #555; margin-top: 0.5rem; }
+.confidence-bar { height: 16px; border-radius: 8px; background: #ddd; margin: 4px 0; }
+.confidence-fill { height: 100%; border-radius: 8px; }
+.high-risk { color: #d9534f; font-weight: bold; }
+.medium-risk { color: #f0ad4e; font-weight: bold; }
+.low-risk { color: #5cb85c; font-weight: bold; }
+.reasoning-step { margin-bottom: 4px; padding: 4px; border-left: 3px solid #2a3eb1; background: #f9f9f9; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h2>Mastra AI EHR Dashboard</h2>
+
+<label for="transcript">Patient Transcript:</label>
+<textarea id="transcript">Patient reports chest pain and shortness of breath</textarea>
+<br>
+<button onclick="runWorkflow()">Run Workflow</button>
+
+<div id="outputPanels">
+    <div class="panel" id="intakePanel"><h3>Intake Agent</h3><pre class="json-output" id="intakeOutput">Waiting...</pre></div>
+    <div class="panel" id="triagePanel"><h3>Triage Agent</h3><pre class="json-output" id="triageOutput">Waiting...</pre></div>
+    <div class="panel" id="latentPanel"><h3>Latent Agent Reasoning Trace</h3><div id="latentOutput" class="json-output"></div></div>
+    <div class="panel" id="validationPanel"><h3>Validation Agent</h3><pre class="json-output" id="validationOutput">Waiting...</pre></div>
+    <div class="panel" id="fhirPanel"><h3>FHIR Output</h3><pre class="json-output" id="fhirOutput">Waiting...</pre></div>
+</div>
+
+<script>
+function renderConfidence(conf) {
+    let color = conf > 0.8 ? '#5cb85c' : conf > 0.5 ? '#f0ad4e' : '#d9534f';
+    return `<div class="confidence-bar"><div class="confidence-fill" style="width:${conf*100}%; background:${color}"></div></div>`;
+}
+
+function highlightRisk(text, risk) {
+    let cls = risk === 'high' ? 'high-risk' : risk === 'medium' ? 'medium-risk' : 'low-risk';
+    return `<span class="${cls}">${text}</span>`;
+}
+
+async function runWorkflow() {
+    const transcript = document.getElementById("transcript").value;
+
+    // Clear outputs
+    document.getElementById("intakeOutput").textContent = "Processing...";
+    document.getElementById("triageOutput").textContent = "Processing...";
+    document.getElementById("latentOutput").innerHTML = "Processing...";
+    document.getElementById("validationOutput").textContent = "Processing...";
+    document.getElementById("fhirOutput").textContent = "Processing...";
+
+    try {
+        const response = await fetch("/api/intake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcript })
+        });
+        const data = await response.json();
+
+        // Intake
+        document.getElementById("intakeOutput").textContent = JSON.stringify(data.intake, null, 2);
+
+        // Triage
+        let triageText = JSON.stringify(data.triage, null, 2);
+        // Highlight high acuity
+        if (data.triage.acuity === 'high') triageText = highlightRisk(triageText, 'high');
+        document.getElementById("triageOutput").innerHTML = triageText;
+
+        // Latent agent reasoning trace
+        const steps = [];
+        if (data.latent_agent.reasoning_trace) {
+            data.latent_agent.reasoning_trace.forEach(step => {
+                const confBar = renderConfidence(step.confidence || 0);
+                steps.push(`<div class="reasoning-step"><strong>${step.action}</strong><br>${step.comment || ''}${confBar}</div>`);
+            });
+        } else {
+            // fallback if reasoning_trace not present
+            steps.push(`<div class="reasoning-step">${JSON.stringify(data.latent_agent, null, 2)}</div>`);
+        }
+        document.getElementById("latentOutput").innerHTML = steps.join('');
+
+        // Validation
+        document.getElementById("validationOutput").textContent = JSON.stringify(data.validation, null, 2);
+
+        // FHIR
+        document.getElementById("fhirOutput").textContent = JSON.stringify(data.fhir, null, 2);
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("latentOutput").textContent = "Error fetching workflow output.";
+    }
+}
+</script>
+
+</body>
+</html>

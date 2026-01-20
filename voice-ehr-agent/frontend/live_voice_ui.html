@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Voice EHR Agent</title>
+</head>
+<body>
+  <h2>Voice-Enabled EHR Intake</h2>
+  <button onclick="send()">Simulate Voice Input</button>
+  <pre id="output"></pre>
+
+  <script>
+    function send() {
+      fetch("http://localhost:8000/intake", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          transcript: "Patient reports chest pain and shortness of breath"
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("output").innerText =
+          JSON.stringify(data, null, 2);
+      });
+    }
+  </script>
+</body>
+</html>
